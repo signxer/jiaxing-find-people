@@ -27,14 +27,29 @@ set IP=%IP: =%
 echo   局域网: %IP%
 echo   本机:   127.0.0.1
 echo.
-echo 客户端服务器地址填: http://%IP%:8080/findpeople
+echo 客户端服务器地址填: http://%IP%:8080
 echo.
 
 REM 创建data目录
 if not exist "%~dp0data" mkdir "%~dp0data"
 
+REM 询问是否加载mock数据
+if exist "%~dp0data\app.db" (
+    echo [提示] 数据库已存在，跳过mock数据
+) else (
+    echo 是否加载测试数据？(包含6个模拟用户+收藏+找人请求)
+    set /p LOADMOCK="输入 Y 加载，回车跳过: "
+    if /i "%LOADMOCK%"=="Y" (
+        echo.
+        php "%~dp0mock_data.php"
+    )
+)
+echo.
+
 REM 启动PHP内置服务器
+echo ==============================
 echo 启动中... 按 Ctrl+C 停止
+echo ==============================
 echo.
 php -S 0.0.0.0:8080 -t "%~dp0"
 

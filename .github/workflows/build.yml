@@ -23,34 +23,17 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Find qfluentwidgets path
-        id: qfw
-        run: |
-          $qfwPath = python -c "import qfluentwidgets, os; print(os.path.dirname(qfluentwidgets.__file__))"
-          echo "path=$qfwPath" >> $env:GITHUB_OUTPUT
-
       - name: Build EXE
+        shell: cmd
         run: |
-          pyinstaller --onefile --windowed --name "嘉行找人" ^
-            --icon client/icon.ico ^
-            --add-data "client/icon.ico;." ^
-            --add-data "${{ steps.qfw.path }};qfluentwidgets" ^
-            --hidden-import PyQt5.sip ^
-            --hidden-import PyQt5.QtWidgets ^
-            --hidden-import PyQt5.QtGui ^
-            --hidden-import PyQt5.QtCore ^
-            --hidden-import PyQt5.QtSvg ^
-            --hidden-import qfluentwidgets ^
-            --hidden-import qfluentwidgets.common ^
-            --hidden-import qfluentwidgets.components ^
-            --hidden-import qfluentwidgets.window ^
-            client/main.py
+          for /f %%i in ('python -c "import qfluentwidgets,os;print(os.path.dirname(qfluentwidgets.__file__))"') do set QFW=%%i
+          pyinstaller --onefile --windowed --name "jiaxing-find-people" --icon client/icon.ico --add-data "client/icon.ico;." --add-data "%QFW%;qfluentwidgets" --hidden-import PyQt5.sip --hidden-import PyQt5.QtWidgets --hidden-import PyQt5.QtGui --hidden-import PyQt5.QtCore --hidden-import PyQt5.QtSvg --hidden-import qfluentwidgets --hidden-import qfluentwidgets.common --hidden-import qfluentwidgets.components --hidden-import qfluentwidgets.window client/main.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: jiaxing-find-people
-          path: dist/嘉行找人.exe
+          path: dist/jiaxing-find-people.exe
 
   release:
     needs: build
@@ -68,5 +51,5 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/嘉行找人.exe
+          files: dist/jiaxing-find-people.exe
           generate_release_notes: true

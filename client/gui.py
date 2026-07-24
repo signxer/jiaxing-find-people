@@ -1,78 +1,213 @@
-"""GUI模块 - 所有弹窗和界面"""
+"""GUI模块 - PyQt5 + PyQt-Fluent-Widgets"""
 
-import tkinter as tk
-from tkinter import ttk, messagebox
-import threading
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
+    QApplication, QSpacerItem, QSizePolicy, QStackedWidget
+)
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QFont, QColor
+
+from qfluentwidgets import (
+    FluentWindow, FluentTitleBar,
+    PrimaryPushButton, PushButton, HyperlinkButton, ToolButton,
+    LineEdit,
+    Dialog, MessageBox,
+    InfoBar, InfoBarPosition,
+    CardWidget, SimpleCardWidget,
+    FluentIcon as FIF,
+    setTheme, Theme,
+    isDarkTheme
+)
 
 
-class FirstSetupDialog:
-    """首次运行 - 输入名字和服务器地址（使用Toplevel避免多Tk冲突）"""
+# ============================================================
+# 首次设置对话框
+# ============================================================
+class FirstSetupDialog(FluentWindow):
+    """首次运行 - 输入名字和服务器地址"""
 
-    def __init__(self, parent):
-        self.parent = parent
-        self.result = None
-        self.server_url = None
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.result_name = None
+        self.result_server = None
 
-    def show(self):
-        self.win = tk.Toplevel(self.parent)
-        self.win.title("嘉行找人 - 首次设置")
-        self.win.geometry("400x250")
-        self.win.resizable(False, False)
-        self.win.attributes('-topmost', True)
-        self.win.grab_set()  # 模态
+        self.setWindowTitle("嘉行找人 - 首次设置")
+        self.setFixedSize(420, 300)
+        self.titleBar.minBtn.hide()
+        self.titleBar.maxBtn.hide()
 
-        # 居中
-        self.win.update_idletasks()
-        x = (self.win.winfo_screenwidth() - 400) // 2
-        y = (self.win.winfo_screenheight() - 250) // 2
-        self.win.geometry(f"400x250+{x}+{y}")
+        self._init_ui()
+        self._center()
 
-        frame = ttk.Frame(self.win, padding=20)
-        frame.pack(fill='both', expand=True)
+    def _center(self):
+        screen = QApplication.primaryScreen().geometry()
+        x = (screen.width() - self.width()) // 2
+        y = (screen.height() - self.height()) // 2
+        self.move(x, y)
 
-        ttk.Label(frame, text="欢迎使用嘉行找人！", font=('微软雅黑', 14, 'bold')).pack(pady=(0, 15))
+    def _init_ui(self):
+        container = QWidget()
+        container.setObjectName("setupContainer")
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(30, 20, 30, 25)
+        layout.setSpacing(12)
+
+        # 标题
+        title = QLabel("👋 欢迎使用嘉行找人")
+        title.setFont(QFont("Microsoft YaHei", 16, QFont.Bold))
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+
+        layout.addSpacing(10)
 
         # 服务器地址
-        ttk.Label(frame, text="服务器地址:").pack(anchor='w')
-        self.server_entry = ttk.Entry(frame, width=45)
-        self.server_entry.pack(fill='x', pady=(0, 10))
-        self.server_entry.insert(0, "http://localhost/findpeople")
+        lbl_server = QLabel("服务器地址")
+        lbl_server.setObjectName("formLabel")
+        layout.addWidget(lbl_server)
+
+        self.server_input = LineEdit()
+        self.server_input.setPlaceholderText("http://ip:端口/findpeople")
+        self.server_input.setText("http://localhost/findpeople")
+        layout.addWidget(self.server_input)
 
         # 用户名
-        ttk.Label(frame, text="你的名字:").pack(anchor='w')
-        self.name_entry = ttk.Entry(frame, width=45)
-        self.name_entry.pack(fill='x', pady=(0, 15))
+        lbl_name = QLabel("你的名字")
+        lbl_name.setObjectName("formLabel")
+        layout.addWidget(lbl_name)
 
-        btn_frame = ttk.Frame(frame)
-        btn_frame.pack(fill='x')
-        ttk.Button(btn_frame, text="确定", command=self._on_ok).pack(side='right', padx=(5, 0))
-        ttk.Button(btn_frame, text="跳过", command=self._on_skip).pack(side='right')
+        self.name_input = LineEdit()
+        self.name_input.setPlaceholderText("输入你的名字")
+        layout.addWidget(self.name_input)
 
-        self.win.protocol("WM_DELETE_WINDOW", self._on_skip)
-        self.win.wait_window()
-        return self.result, self.server_url
+        layout.addSpacing(10)
+
+        # 按钮
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        self.skip_btn = HyperlinkButton(self)
+        self.skip_btn.setText("跳过")
+        self.skip_btn.clicked.connect(self._on_skip)
+        btn_layout.addWidget(self.skip_btn)
+
+        self.ok_btn = PrimaryPushButton("确定")
+        self.ok_btn.setFixedWidth(100)
+        self.ok_btn.clicked.connect(self._on_ok)
+        btn_layout.addWidget(self.ok_btn)
+
+        layout.addLayout(btn_layout)
+
+        self.setWidget(container)
 
     def _on_ok(self):
-        name = self.name_entry.get().strip()
-        server = self.server_entry.get().strip()
+        name = self.name_input.text().strip()
+        server = self.server_input.text().strip()
         if not name:
-            messagebox.showwarning("提示", "请输入你的名字", parent=self.win)
+            InfoBar.warning("提示", "请输入你的名字", parent=self)
             return
         if not server:
-            messagebox.showwarning("提示", "请输入服务器地址", parent=self.win)
+            InfoBar.warning("提示", "请输入服务器地址", parent=self)
             return
-        self.result = name
-        self.server_url = server
-        self.win.destroy()
+        self.result_name = name
+        self.result_server = server
+        self.close()
 
     def _on_skip(self):
-        self.win.destroy()
+        self.close()
 
 
-class UserListWindow:
-    """用户列表窗口 - 在线用户、收藏、找人"""
+# ============================================================
+# 设置对话框
+# ============================================================
+class SettingsDialog(FluentWindow):
+    """设置窗口 - 修改名字和服务器"""
 
-    def __init__(self, users, favorites, on_find, on_favorite, my_ip):
+    def __init__(self, current_name, current_server, current_ip, parent=None):
+        super().__init__(parent)
+        self.current_name = current_name
+        self.current_server = current_server
+        self.current_ip = current_ip
+        self.result = None
+
+        self.setWindowTitle("设置")
+        self.setFixedSize(420, 320)
+        self.titleBar.minBtn.hide()
+        self.titleBar.maxBtn.hide()
+
+        self._init_ui()
+        self._center()
+
+    def _center(self):
+        screen = QApplication.primaryScreen().geometry()
+        x = (screen.width() - self.width()) // 2
+        y = (screen.height() - self.height()) // 2
+        self.move(x, y)
+
+    def _init_ui(self):
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(30, 20, 30, 25)
+        layout.setSpacing(12)
+
+        title = QLabel("⚙️ 设置")
+        title.setFont(QFont("Microsoft YaHei", 16, QFont.Bold))
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+
+        layout.addSpacing(10)
+
+        # 服务器
+        layout.addWidget(QLabel("服务器地址"))
+        self.server_input = LineEdit()
+        self.server_input.setText(self.current_server)
+        layout.addWidget(self.server_input)
+
+        # 用户名
+        layout.addWidget(QLabel("你的名字"))
+        self.name_input = LineEdit()
+        self.name_input.setText(self.current_name)
+        layout.addWidget(self.name_input)
+
+        # IP显示
+        ip_label = QLabel(f"本机IP: {self.current_ip}")
+        ip_label.setObjectName("ipLabel")
+        layout.addWidget(ip_label)
+
+        layout.addSpacing(10)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        cancel_btn = PushButton("取消")
+        cancel_btn.clicked.connect(self.close)
+        btn_layout.addWidget(cancel_btn)
+
+        save_btn = PrimaryPushButton("保存")
+        save_btn.setFixedWidth(100)
+        save_btn.clicked.connect(self._on_save)
+        btn_layout.addWidget(save_btn)
+
+        layout.addLayout(btn_layout)
+        self.setWidget(container)
+
+    def _on_save(self):
+        name = self.name_input.text().strip()
+        server = self.server_input.text().strip()
+        if not name or not server:
+            InfoBar.warning("提示", "名字和服务器地址不能为空", parent=self)
+            return
+        self.result = {'name': name, 'server_url': server}
+        self.close()
+
+
+# ============================================================
+# 用户列表窗口
+# ============================================================
+class UserListWindow(FluentWindow):
+    """用户列表 - 在线用户 / 收藏 / 全部"""
+
+    def __init__(self, users, favorites, on_find, on_favorite, my_ip, parent=None):
+        super().__init__(parent)
         self.users = users
         self.favorites = favorites
         self.on_find = on_find
@@ -80,249 +215,314 @@ class UserListWindow:
         self.my_ip = my_ip
         self.favorite_ips = {f['ip'] for f in favorites}
 
-    def show(self):
-        self.root = tk.Tk()
-        self.root.title("在线用户")
-        self.root.geometry("500x400")
-        self.root.attributes('-topmost', True)
+        self.setWindowTitle("嘉行找人")
+        self.resize(520, 450)
+        self.titleBar.maxBtn.hide()
 
-        # 居中
-        self.root.update_idletasks()
-        x = (self.root.winfo_screenwidth() - 500) // 2
-        y = (self.root.winfo_screenheight() - 400) // 2
-        self.root.geometry(f"500x400+{x}+{y}")
+        self._init_ui()
+        self._center()
 
-        frame = ttk.Frame(self.root, padding=10)
-        frame.pack(fill='both', expand=True)
+    def _center(self):
+        screen = QApplication.primaryScreen().geometry()
+        x = (screen.width() - self.width()) // 2
+        y = (screen.height() - self.height()) // 2
+        self.move(x, y)
 
-        # 标签页
-        notebook = ttk.Notebook(frame)
-        notebook.pack(fill='both', expand=True)
+    def _init_ui(self):
+        from qfluentwidgets import TabBar
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(15, 10, 15, 15)
+        layout.setSpacing(10)
+
+        # Tab栏
+        self.tab_bar = TabBar(self)
+        self.tab_bar.addTab("online", "🟢 在线用户")
+        self.tab_bar.addTab("fav", "⭐ 我的收藏")
+        self.tab_bar.addTab("all", "📋 全部用户")
+        self.tab_bar.currentChanged.connect(self._on_tab_changed)
+        layout.addWidget(self.tab_bar)
+
+        # 页面栈
+        self.stack = QStackedWidget()
 
         # 在线用户页
-        online_frame = ttk.Frame(notebook, padding=5)
-        notebook.add(online_frame, text="在线用户")
-        self._build_user_list(online_frame, [u for u in self.users if u['online'] and u['ip'] != self.my_ip])
+        online_users = [u for u in self.users if u['online'] and u['ip'] != self.my_ip]
+        self.stack.addWidget(self._build_user_page(online_users))
 
         # 收藏页
-        fav_frame = ttk.Frame(notebook, padding=5)
-        notebook.add(fav_frame, text="我的收藏")
-        self._build_user_list(fav_frame, [u for u in self.favorites if u['ip'] != self.my_ip], show_fav_btn=False)
+        self.stack.addWidget(self._build_user_page(
+            [u for u in self.favorites if u['ip'] != self.my_ip], show_fav_btn=False
+        ))
 
         # 全部用户页
-        all_frame = ttk.Frame(notebook, padding=5)
-        notebook.add(all_frame, text="全部用户")
-        self._build_user_list(all_frame, [u for u in self.users if u['ip'] != self.my_ip])
+        self.stack.addWidget(self._build_user_page(
+            [u for u in self.users if u['ip'] != self.my_ip]
+        ))
 
-        # 关闭按钮
-        ttk.Button(frame, text="关闭", command=self.root.destroy).pack(pady=(10, 0))
+        layout.addWidget(self.stack)
+        self.setWidget(container)
 
-        self.root.mainloop()
+    def _on_tab_changed(self, index):
+        self.stack.setCurrentIndex(index)
 
-    def _build_user_list(self, parent, users, show_fav_btn=True):
-        """构建用户列表"""
+    def _build_user_page(self, users, show_fav_btn=True):
+        """构建一个用户列表页面"""
+        from PyQt5.QtWidgets import QScrollArea
+
+        page = QWidget()
+        page_layout = QVBoxLayout(page)
+        page_layout.setContentsMargins(0, 5, 0, 0)
+        page_layout.setSpacing(6)
+
         if not users:
-            ttk.Label(parent, text="暂无用户", foreground='gray').pack(pady=20)
-            return
+            empty = QLabel("暂无用户")
+            empty.setAlignment(Qt.AlignCenter)
+            empty.setObjectName("emptyLabel")
+            page_layout.addWidget(empty)
+            page_layout.addStretch()
+            return page
 
-        # 滚动容器
-        canvas = tk.Canvas(parent, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
-        scroll_frame = ttk.Frame(canvas)
-
-        scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        # 滚动区域
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(0, 0, 8, 0)
+        scroll_layout.setSpacing(6)
 
         for user in users:
-            row = ttk.Frame(scroll_frame)
-            row.pack(fill='x', pady=2)
+            card = self._build_user_card(user, show_fav_btn)
+            scroll_layout.addWidget(card)
 
-            # 在线状态指示
-            status = "🟢" if user['online'] else "⚫"
-            ttk.Label(row, text=f"{status} {user['name']}", width=20, anchor='w').pack(side='left', padx=(0, 10))
-            ttk.Label(row, text=user['ip'], foreground='gray', width=15).pack(side='left')
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_content)
+        page_layout.addWidget(scroll)
+        return page
 
-            # 收藏按钮
-            if show_fav_btn:
-                is_fav = user['ip'] in self.favorite_ips
-                fav_text = "★ 已收藏" if is_fav else "☆ 收藏"
-                btn = ttk.Button(row, text=fav_text, width=8,
-                                 command=lambda ip=user['ip']: self._toggle_fav(ip))
-                btn.pack(side='right', padx=2)
+    def _build_user_card(self, user, show_fav_btn=True):
+        """构建单个用户卡片"""
+        card = SimpleCardWidget()
+        card.setFixedHeight(52)
+        layout = QHBoxLayout(card)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(10)
 
-            # 找人按钮(仅在线用户)
-            if user['online']:
-                ttk.Button(row, text="找 TA", width=6,
-                           command=lambda ip=user['ip'], name=user['name']: self._find_user(ip, name)).pack(side='right', padx=2)
+        # 在线状态
+        status_dot = QLabel("●")
+        status_dot.setFixedWidth(16)
+        status_dot.setAlignment(Qt.AlignCenter)
+        if user['online']:
+            status_dot.setStyleSheet("color: #4CAF50; font-size: 12px;")
+        else:
+            status_dot.setStyleSheet("color: #888; font-size: 12px;")
+        layout.addWidget(status_dot)
 
-    def _toggle_fav(self, ip):
+        # 名字
+        name_label = QLabel(user['name'])
+        name_label.setFont(QFont("Microsoft YaHei", 10, QFont.Bold))
+        layout.addWidget(name_label)
+
+        # IP
+        ip_label = QLabel(user['ip'])
+        ip_label.setObjectName("ipLabel")
+        layout.addWidget(ip_label)
+
+        layout.addStretch()
+
+        # 收藏按钮
+        if show_fav_btn:
+            is_fav = user['ip'] in self.favorite_ips
+            fav_btn = ToolButton(FIF.HEART if is_fav else FIF.HEART)
+            fav_btn.setToolTip("取消收藏" if is_fav else "收藏")
+            if is_fav:
+                fav_btn.setStyleSheet("QToolButton { color: #e91e63; }")
+            fav_btn.clicked.connect(lambda checked, ip=user['ip']: self._toggle_fav(ip, fav_btn))
+            layout.addWidget(fav_btn)
+
+        # 找人按钮
+        if user['online']:
+            find_btn = PrimaryPushButton("找 TA")
+            find_btn.setFixedWidth(70)
+            find_btn.setFixedHeight(32)
+            find_btn.clicked.connect(lambda checked, ip=user['ip'], name=user['name']: self._find_user(ip, name))
+            layout.addWidget(find_btn)
+
+        return card
+
+    def _toggle_fav(self, ip, btn):
         self.on_favorite(ip)
         if ip in self.favorite_ips:
             self.favorite_ips.discard(ip)
+            btn.setToolTip("收藏")
+            btn.setStyleSheet("")
         else:
             self.favorite_ips.add(ip)
+            btn.setToolTip("取消收藏")
+            btn.setStyleSheet("QToolButton { color: #e91e63; }")
 
     def _find_user(self, ip, name):
-        if messagebox.askyesno("确认", f"确定要找 {name} 吗？", parent=self.root):
-            self.on_find(ip, name)
-            messagebox.showinfo("已发送", f"已向 {name} 发送找人请求，等待回应...", parent=self.root)
+        w = Dialog("确认找人", f"确定要找 {name} 吗？", self)
+        w.yesSignal.connect(lambda: self._do_find(ip, name))
+        w.exec()
+
+    def _do_find(self, ip, name):
+        self.on_find(ip, name)
+        InfoBar.success("已发送", f"已向 {name} 发送找人请求，等待回应...",
+                        position=InfoBarPosition.TOP, parent=self)
 
 
-class IncomingFindAlert:
+# ============================================================
+# 被找全屏弹窗
+# ============================================================
+class IncomingFindAlert(QWidget):
     """被找全屏弹窗 - 醒目提醒"""
 
     def __init__(self, from_name, request_id, on_respond):
+        super().__init__()
         self.from_name = from_name
         self.request_id = request_id
         self.on_respond = on_respond
         self.responded = None
 
-    def show(self):
-        self.root = tk.Toplevel()
-        self.root.title("有人找你！")
-        self.root.attributes('-fullscreen', True)
-        self.root.attributes('-topmost', True)
-        self.root.configure(bg='#1a1a2e')
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, False)
+        self.setStyleSheet("background-color: #1a1a2e;")
 
-        # 主框架
-        main_frame = tk.Frame(self.root, bg='#1a1a2e')
-        main_frame.place(relx=0.5, rely=0.5, anchor='center')
+        self._init_ui()
 
-        # 图标
-        tk.Label(main_frame, text="🔔", font=('Arial', 80), bg='#1a1a2e', fg='#e94560').pack()
+    def _init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignCenter)
+        layout.setSpacing(20)
+
+        # 铃铛
+        bell = QLabel("🔔")
+        bell.setFont(QFont("Arial", 72))
+        bell.setAlignment(Qt.AlignCenter)
+        layout.addWidget(bell)
 
         # 提示文字
-        tk.Label(main_frame, text=f"{self.from_name} 在找你！",
-                 font=('微软雅黑', 36, 'bold'), bg='#1a1a2e', fg='#ffffff').pack(pady=20)
+        msg = QLabel(f"{self.from_name} 在找你！")
+        msg.setFont(QFont("Microsoft YaHei", 32, QFont.Bold))
+        msg.setStyleSheet("color: white;")
+        msg.setAlignment(Qt.AlignCenter)
+        layout.addWidget(msg)
 
-        tk.Label(main_frame, text="请注意查看",
-                 font=('微软雅黑', 18), bg='#1a1a2e', fg='#aaaaaa').pack(pady=(0, 40))
+        sub = QLabel("请注意查看")
+        sub.setFont(QFont("Microsoft YaHei", 16))
+        sub.setStyleSheet("color: #aaaaaa;")
+        sub.setAlignment(Qt.AlignCenter)
+        layout.addWidget(sub)
 
-        # 按钮框架
-        btn_frame = tk.Frame(main_frame, bg='#1a1a2e')
-        btn_frame.pack()
+        layout.addSpacing(30)
 
-        ok_btn = tk.Button(btn_frame, text="✓ 我知道了", font=('微软雅黑', 16, 'bold'),
-                           bg='#0f3460', fg='#ffffff', activebackground='#16213e',
-                           width=15, height=2, relief='flat', cursor='hand2',
-                           command=lambda: self._respond(True))
-        ok_btn.pack(side='left', padx=20)
+        # 按钮
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(30)
+        btn_layout.setAlignment(Qt.AlignCenter)
 
-        ignore_btn = tk.Button(btn_frame, text="✗ 忽略", font=('微软雅黑', 16),
-                               bg='#333333', fg='#aaaaaa', activebackground='#444444',
-                               width=15, height=2, relief='flat', cursor='hand2',
-                               command=lambda: self._respond(False))
-        ignore_btn.pack(side='left', padx=20)
+        ok_btn = PrimaryPushButton("✓ 我知道了")
+        ok_btn.setFixedSize(180, 50)
+        ok_btn.setFont(QFont("Microsoft YaHei", 14, QFont.Bold))
+        ok_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #0f3460;
+                color: white;
+                border: none;
+                border-radius: 8px;
+            }
+            QPushButton:hover {
+                background-color: #16213e;
+            }
+        """)
+        ok_btn.clicked.connect(lambda: self._respond(True))
+        btn_layout.addWidget(ok_btn)
 
-        self.root.bind('<Escape>', lambda e: self._respond(False))
-        self.root.protocol("WM_DELETE_WINDOW", lambda: self._respond(False))
-        self.root.grab_set()
-        self.root.wait_window()
-        return self.responded
+        ignore_btn = PushButton("✗ 忽略")
+        ignore_btn.setFixedSize(180, 50)
+        ignore_btn.setFont(QFont("Microsoft YaHei", 14))
+        ignore_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #333;
+                color: #aaa;
+                border: none;
+                border-radius: 8px;
+            }
+            QPushButton:hover {
+                background-color: #444;
+            }
+        """)
+        ignore_btn.clicked.connect(lambda: self._respond(False))
+        btn_layout.addWidget(ignore_btn)
+
+        layout.addLayout(btn_layout)
+
+    def showEvent(self, event):
+        """显示时全屏"""
+        screen = QApplication.primaryScreen().geometry()
+        self.setGeometry(screen)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self._respond(False)
 
     def _respond(self, accepted):
         self.responded = accepted
         self.on_respond(self.request_id, accepted)
-        self.root.destroy()
+        self.close()
 
 
-class FindResultNotification:
-    """找人结果通知"""
+# ============================================================
+# 找人结果通知
+# ============================================================
+class FindResultDialog(FluentWindow):
+    """找人结果弹窗"""
 
-    def __init__(self, to_name, accepted):
-        self.to_name = to_name
-        self.accepted = accepted
+    def __init__(self, to_name, accepted, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("找人结果")
+        self.setFixedSize(350, 200)
+        self.titleBar.minBtn.hide()
+        self.titleBar.maxBtn.hide()
 
-    def show(self):
-        self.root = tk.Toplevel()
-        self.root.title("找人结果")
-        self.root.geometry("350x180")
-        self.root.attributes('-topmost', True)
-        self.root.resizable(False, False)
+        self._init_ui(to_name, accepted)
+        self._center()
 
-        # 居中
-        self.root.update_idletasks()
-        x = (self.root.winfo_screenwidth() - 350) // 2
-        y = (self.root.winfo_screenheight() - 180) // 2
-        self.root.geometry(f"350x180+{x}+{y}")
+    def _center(self):
+        screen = QApplication.primaryScreen().geometry()
+        x = (screen.width() - self.width()) // 2
+        y = (screen.height() - self.height()) // 2
+        self.move(x, y)
 
-        frame = ttk.Frame(self.root, padding=20)
-        frame.pack(fill='both', expand=True)
+    def _init_ui(self, name, accepted):
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(30, 20, 30, 25)
+        layout.setSpacing(10)
+        layout.setAlignment(Qt.AlignCenter)
 
-        if self.accepted:
-            ttk.Label(frame, text="✅", font=('Arial', 36)).pack()
-            ttk.Label(frame, text=f"{self.to_name} 已收到你的请求",
-                      font=('微软雅黑', 12)).pack(pady=10)
-        else:
-            ttk.Label(frame, text="❌", font=('Arial', 36)).pack()
-            ttk.Label(frame, text=f"{self.to_name} 未回应",
-                      font=('微软雅黑', 12)).pack(pady=10)
+        icon = QLabel("✅" if accepted else "❌")
+        icon.setFont(QFont("Arial", 36))
+        icon.setAlignment(Qt.AlignCenter)
+        layout.addWidget(icon)
 
-        ttk.Button(frame, text="确定", command=self.root.destroy).pack(pady=(10, 0))
-        self.root.grab_set()
-        self.root.wait_window()
+        msg = QLabel(f"{name} 已收到你的请求" if accepted else f"{name} 未回应")
+        msg.setFont(QFont("Microsoft YaHei", 12))
+        msg.setAlignment(Qt.AlignCenter)
+        layout.addWidget(msg)
 
+        layout.addSpacing(10)
 
-class SettingsDialog:
-    """设置窗口 - 修改名字和服务器"""
+        ok_btn = PrimaryPushButton("确定")
+        ok_btn.setFixedWidth(100)
+        ok_btn.clicked.connect(self.close)
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        btn_layout.addWidget(ok_btn)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
 
-    def __init__(self, current_name, current_server, current_ip):
-        self.current_name = current_name
-        self.current_server = current_server
-        self.current_ip = current_ip
-        self.result = None
-
-    def show(self):
-        self.root = tk.Toplevel()
-        self.root.title("设置")
-        self.root.geometry("400x280")
-        self.root.attributes('-topmost', True)
-        self.root.resizable(False, False)
-
-        # 居中
-        self.root.update_idletasks()
-        x = (self.root.winfo_screenwidth() - 400) // 2
-        y = (self.root.winfo_screenheight() - 280) // 2
-        self.root.geometry(f"400x280+{x}+{y}")
-
-        frame = ttk.Frame(self.root, padding=20)
-        frame.pack(fill='both', expand=True)
-
-        ttk.Label(frame, text="设置", font=('微软雅黑', 14, 'bold')).pack(pady=(0, 15))
-
-        # 服务器地址
-        ttk.Label(frame, text="服务器地址:").pack(anchor='w')
-        self.server_entry = ttk.Entry(frame, width=45)
-        self.server_entry.pack(fill='x', pady=(0, 10))
-        self.server_entry.insert(0, self.current_server)
-
-        # 用户名
-        ttk.Label(frame, text="你的名字:").pack(anchor='w')
-        self.name_entry = ttk.Entry(frame, width=45)
-        self.name_entry.pack(fill='x', pady=(0, 5))
-        self.name_entry.insert(0, self.current_name)
-
-        # IP显示
-        ttk.Label(frame, text=f"本机IP: {self.current_ip}", foreground='gray').pack(anchor='w', pady=(0, 15))
-
-        btn_frame = ttk.Frame(frame)
-        btn_frame.pack(fill='x')
-        ttk.Button(btn_frame, text="保存", command=self._on_save).pack(side='right', padx=(5, 0))
-        ttk.Button(btn_frame, text="取消", command=self.root.destroy).pack(side='right')
-
-        self.root.grab_set()
-        self.root.wait_window()
-        return self.result
-
-    def _on_save(self):
-        name = self.name_entry.get().strip()
-        server = self.server_entry.get().strip()
-        if not name or not server:
-            messagebox.showwarning("提示", "名字和服务器地址不能为空", parent=self.root)
-            return
-        self.result = {'name': name, 'server_url': server}
-        self.root.destroy()
+        self.setWidget(container)

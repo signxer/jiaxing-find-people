@@ -23,9 +23,28 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Find qfluentwidgets path
+        id: qfw
+        run: |
+          $qfwPath = python -c "import qfluentwidgets, os; print(os.path.dirname(qfluentwidgets.__file__))"
+          echo "path=$qfwPath" >> $env:GITHUB_OUTPUT
+
       - name: Build EXE
         run: |
-          pyinstaller --onefile --windowed --name "嘉行找人" --icon client/icon.ico --add-data "client/icon.ico;." client/main.py
+          pyinstaller --onefile --windowed --name "嘉行找人" ^
+            --icon client/icon.ico ^
+            --add-data "client/icon.ico;." ^
+            --add-data "${{ steps.qfw.path }};qfluentwidgets" ^
+            --hidden-import PyQt5.sip ^
+            --hidden-import PyQt5.QtWidgets ^
+            --hidden-import PyQt5.QtGui ^
+            --hidden-import PyQt5.QtCore ^
+            --hidden-import PyQt5.QtSvg ^
+            --hidden-import qfluentwidgets ^
+            --hidden-import qfluentwidgets.common ^
+            --hidden-import qfluentwidgets.components ^
+            --hidden-import qfluentwidgets.window ^
+            client/main.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

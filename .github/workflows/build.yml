@@ -25,7 +25,7 @@ jobs:
 
       - name: Build EXE
         run: |
-          pyinstaller --onefile --windowed --name "嘉行找人" client/main.py
+          pyinstaller --onefile --windowed --name "嘉行找人" --icon client/icon.ico --add-data "client/icon.ico;." client/main.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

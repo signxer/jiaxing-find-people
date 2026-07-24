@@ -106,8 +106,20 @@ class PeopleFinderApp:
             menu
         )
 
+    def _get_icon_path(self):
+        """获取icon.ico路径，兼容打包后的exe"""
+        if getattr(sys, 'frozen', False):
+            base = sys._MEIPASS
+        else:
+            base = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(base, 'icon.ico')
+
     def _create_icon_image(self):
-        """创建托盘图标图片"""
+        """加载icon.ico作为托盘图标"""
+        icon_path = self._get_icon_path()
+        if os.path.exists(icon_path):
+            return Image.open(icon_path)
+        # fallback：简单绿色圆形
         img = Image.new('RGBA', (64, 64), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         draw.ellipse([8, 8, 56, 56], fill='#4CAF50', outline='#388E3C')

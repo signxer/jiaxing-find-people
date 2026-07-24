@@ -39,53 +39,62 @@ class PeopleFinderApp:
     def __init__(self):
         self.my_ip = api_client.get_local_ip()
         self.running = True
-        self.polling_interval = 30  # 默认30秒轮询
-        self.waiting_response = False  # 是否在等待找人响应
+        self.polling_interval = 30
+        self.waiting_response = False
+        self.server_ok = False  # 服务器是否可用
 
         # 消息队列：轮询线程 → 主线程
         self.msg_queue = queue.Queue()
 
-        # 隐藏的tkinter根窗口（用于after调度）
+        # tkinter根窗口（主线程）
         self.root = tk.Tk()
-        self.root.withdraw()  # 隐藏主窗口
+        self.root.withdraw()
 
-        # 检查是否首次运行
-        self._check_first_run()
-
-        # 创建系统托盘图标
+        # 先创建托盘图标（确保一定显示）
         self._create_tray_icon()
 
-        # 注册队列检查
+        # 注册队列检查（主线程定时器）
         self._poll_queue()
+
+    def _after_root_ready(self):
+        """根窗口就绪后执行的初始化（延迟到mainloop前）"""
+        self._check_first_run()
+        self._start_polling()
 
     def _check_first_run(self):
         """检查是否需要首次设置"""
         username = config.get_username()
         server_url = config.get_server_url()
 
-        if not username:
-            dialog = FirstSetupDialog()
-            name, server = dialog.show()
-            if not name:
-                sys.exit(0)
-            config.set_username(name)
-            if server:
-                config.set_server_url(server)
+        # 已有配置，测试服务器连接
+        if username and server_url:
+            self._try_register(username)
+            return
 
-            # 注册到服务器
-            self._register(name)
+        # 首次运行，弹出设置
+        dialog = FirstSetupDialog(self.root)
+        name, server = dialog.show()
+        if not name:
+            # 用户跳过，稍后可在设置里配置
+            return
+        config.set_username(name)
+        if server:
+            config.set_server_url(server)
+        self._try_register(name)
 
-    def _register(self, name):
-        """注册用户"""
+    def _try_register(self, name):
+        """尝试注册，失败不阻塞"""
         try:
             result = api_client.register(name, self.my_ip)
             if 'error' in result:
-                self._show_error(f"注册失败: {result['error']}")
-                return False
-            return True
+                print(f"[提示] 注册失败: {result['error']}，可在设置中修改服务器地址")
+                self.server_ok = False
+            else:
+                self.server_ok = True
+                print(f"[OK] 注册成功: {name} ({self.my_ip})")
         except Exception as e:
-            self._show_error(f"注册失败: {e}")
-            return False
+            print(f"[提示] 服务器连接失败: {e}，可在设置中修改服务器地址")
+            self.server_ok = False
 
     def _create_tray_icon(self):
         """创建系统托盘图标"""
@@ -100,7 +109,7 @@ class PeopleFinderApp:
         )
 
         self.icon = pystray.Icon(
-            "people-finder",
+            "jiaxing-find-people",
             image,
             "嘉行找人",
             menu
@@ -119,7 +128,7 @@ class PeopleFinderApp:
         icon_path = self._get_icon_path()
         if os.path.exists(icon_path):
             return Image.open(icon_path)
-        # fallback：简单绿色圆形
+        # fallback
         img = Image.new('RGBA', (64, 64), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         draw.ellipse([8, 8, 56, 56], fill='#4CAF50', outline='#388E3C')
@@ -138,7 +147,6 @@ class PeopleFinderApp:
                     self._show_find_result(data)
         except queue.Empty:
             pass
-        # 每200ms检查一次
         self.root.after(200, self._poll_queue)
 
     def _start_polling(self):
@@ -162,25 +170,28 @@ class PeopleFinderApp:
             if not result or 'error' in result:
                 return
 
-            # 检查是否有人找我
+            # 服务器可用
+            if not self.server_ok:
+                self.server_ok = True
+
             incoming = result.get('incoming')
             if incoming:
                 self.msg_queue.put(('incoming_find', incoming))
 
-            # 检查自己请求的结果
             my_result = result.get('my_result')
             if my_result and self.waiting_response:
                 self.waiting_response = False
                 self.msg_queue.put(('find_result', my_result))
 
         except Exception as e:
-            print(f"sync请求失败: {e}")
+            if self.server_ok:
+                print(f"服务器连接失败: {e}")
+                self.server_ok = False
 
     def _handle_incoming_find(self, incoming):
         """处理有人找我（主线程调用）"""
         request_id = incoming['request_id']
         from_name = incoming['from_name']
-
         alert = IncomingFindAlert(from_name, request_id, self._respond_find)
         alert.show()
 
@@ -206,7 +217,7 @@ class PeopleFinderApp:
                 favorites = api_client.get_favorites()
 
                 if isinstance(users, dict) and 'error' in users:
-                    self._show_error(f"获取用户失败: {users['error']}")
+                    print(f"获取用户失败: {users['error']}")
                     return
 
                 window = UserListWindow(
@@ -218,7 +229,7 @@ class PeopleFinderApp:
                 )
                 window.show()
             except Exception as e:
-                self._show_error(f"获取用户列表失败: {e}")
+                print(f"获取用户列表失败: {e}")
 
         threading.Thread(target=fetch_and_show, daemon=True).start()
 
@@ -229,7 +240,7 @@ class PeopleFinderApp:
                 favorites = api_client.get_favorites()
 
                 if isinstance(favorites, dict) and 'error' in favorites:
-                    self._show_error(f"获取收藏失败: {favorites['error']}")
+                    print(f"获取收藏失败: {favorites['error']}")
                     return
 
                 window = UserListWindow(
@@ -241,7 +252,7 @@ class PeopleFinderApp:
                 )
                 window.show()
             except Exception as e:
-                self._show_error(f"获取收藏列表失败: {e}")
+                print(f"获取收藏列表失败: {e}")
 
         threading.Thread(target=fetch_and_show, daemon=True).start()
 
@@ -250,15 +261,13 @@ class PeopleFinderApp:
         try:
             result = api_client.send_find(to_ip)
             if 'error' in result:
-                self._show_error(f"发送失败: {result['error']}")
+                print(f"发送失败: {result['error']}")
                 return
             self.waiting_response = True
-            # 等待响应时加快轮询
             self.polling_interval = 10
-            # 启动超时恢复
             threading.Thread(target=self._restore_polling_after_timeout, daemon=True).start()
         except Exception as e:
-            self._show_error(f"发送失败: {e}")
+            print(f"发送失败: {e}")
 
     def _restore_polling_after_timeout(self):
         """超时后恢复正常轮询间隔"""
@@ -289,15 +298,9 @@ class PeopleFinderApp:
                 old_name = config.get_username()
                 config.set_username(result['name'])
                 config.set_server_url(result['server_url'])
-
-                if result['name'] != old_name:
-                    self._register(result['name'])
+                self._try_register(result['name'])
 
         threading.Thread(target=show, daemon=True).start()
-
-    def _show_error(self, message):
-        """显示错误信息"""
-        print(f"[错误] {message}")
 
     def _quit(self, icon=None, item=None):
         """退出程序"""
@@ -308,16 +311,16 @@ class PeopleFinderApp:
 
     def run(self):
         """运行应用"""
-        # 启动轮询线程
-        self._start_polling()
-
-        # 启动pystray（在后台线程）
+        # 启动pystray（后台线程）
         tray_thread = threading.Thread(target=self.icon.run, daemon=True)
         tray_thread.start()
 
         print("嘉行找人已启动，最小化到系统托盘...")
         print(f"本机IP: {self.my_ip}")
         print(f"服务器: {config.get_server_url()}")
+
+        # 延迟初始化（等mainloop启动后再弹对话框和启动轮询）
+        self.root.after(500, self._after_root_ready)
 
         # 主线程运行tkinter事件循环
         self.root.mainloop()

@@ -1,31 +1,33 @@
 """GUI模块 - 所有弹窗和界面"""
 
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
+from tkinter import ttk, messagebox
 import threading
 
 
 class FirstSetupDialog:
-    """首次运行 - 输入名字和服务器地址"""
+    """首次运行 - 输入名字和服务器地址（使用Toplevel避免多Tk冲突）"""
 
-    def __init__(self):
+    def __init__(self, parent):
+        self.parent = parent
         self.result = None
         self.server_url = None
 
     def show(self):
-        self.root = tk.Tk()
-        self.root.title("嘉行找人 - 首次设置")
-        self.root.geometry("400x250")
-        self.root.resizable(False, False)
-        self.root.attributes('-topmost', True)
+        self.win = tk.Toplevel(self.parent)
+        self.win.title("嘉行找人 - 首次设置")
+        self.win.geometry("400x250")
+        self.win.resizable(False, False)
+        self.win.attributes('-topmost', True)
+        self.win.grab_set()  # 模态
 
-        # 居中显示
-        self.root.update_idletasks()
-        x = (self.root.winfo_screenwidth() - 400) // 2
-        y = (self.root.winfo_screenheight() - 250) // 2
-        self.root.geometry(f"400x250+{x}+{y}")
+        # 居中
+        self.win.update_idletasks()
+        x = (self.win.winfo_screenwidth() - 400) // 2
+        y = (self.win.winfo_screenheight() - 250) // 2
+        self.win.geometry(f"400x250+{x}+{y}")
 
-        frame = ttk.Frame(self.root, padding=20)
+        frame = ttk.Frame(self.win, padding=20)
         frame.pack(fill='both', expand=True)
 
         ttk.Label(frame, text="欢迎使用嘉行找人！", font=('微软雅黑', 14, 'bold')).pack(pady=(0, 15))
@@ -44,26 +46,27 @@ class FirstSetupDialog:
         btn_frame = ttk.Frame(frame)
         btn_frame.pack(fill='x')
         ttk.Button(btn_frame, text="确定", command=self._on_ok).pack(side='right', padx=(5, 0))
-        ttk.Button(btn_frame, text="取消", command=self._on_cancel).pack(side='right')
+        ttk.Button(btn_frame, text="跳过", command=self._on_skip).pack(side='right')
 
-        self.root.mainloop()
+        self.win.protocol("WM_DELETE_WINDOW", self._on_skip)
+        self.win.wait_window()
         return self.result, self.server_url
 
     def _on_ok(self):
         name = self.name_entry.get().strip()
         server = self.server_entry.get().strip()
         if not name:
-            messagebox.showwarning("提示", "请输入你的名字", parent=self.root)
+            messagebox.showwarning("提示", "请输入你的名字", parent=self.win)
             return
         if not server:
-            messagebox.showwarning("提示", "请输入服务器地址", parent=self.root)
+            messagebox.showwarning("提示", "请输入服务器地址", parent=self.win)
             return
         self.result = name
         self.server_url = server
-        self.root.destroy()
+        self.win.destroy()
 
-    def _on_cancel(self):
-        self.root.destroy()
+    def _on_skip(self):
+        self.win.destroy()
 
 
 class UserListWindow:
@@ -158,7 +161,6 @@ class UserListWindow:
 
     def _toggle_fav(self, ip):
         self.on_favorite(ip)
-        # 刷新标记
         if ip in self.favorite_ips:
             self.favorite_ips.discard(ip)
         else:
@@ -180,10 +182,8 @@ class IncomingFindAlert:
         self.responded = None
 
     def show(self):
-        self.root = tk.Tk()
+        self.root = tk.Toplevel()
         self.root.title("有人找你！")
-
-        # 全屏
         self.root.attributes('-fullscreen', True)
         self.root.attributes('-topmost', True)
         self.root.configure(bg='#1a1a2e')
@@ -206,24 +206,22 @@ class IncomingFindAlert:
         btn_frame = tk.Frame(main_frame, bg='#1a1a2e')
         btn_frame.pack()
 
-        # 知道了按钮(绿色)
         ok_btn = tk.Button(btn_frame, text="✓ 我知道了", font=('微软雅黑', 16, 'bold'),
                            bg='#0f3460', fg='#ffffff', activebackground='#16213e',
                            width=15, height=2, relief='flat', cursor='hand2',
                            command=lambda: self._respond(True))
         ok_btn.pack(side='left', padx=20)
 
-        # 忽略按钮(灰色)
         ignore_btn = tk.Button(btn_frame, text="✗ 忽略", font=('微软雅黑', 16),
                                bg='#333333', fg='#aaaaaa', activebackground='#444444',
                                width=15, height=2, relief='flat', cursor='hand2',
                                command=lambda: self._respond(False))
         ignore_btn.pack(side='left', padx=20)
 
-        # ESC退出
         self.root.bind('<Escape>', lambda e: self._respond(False))
-
-        self.root.mainloop()
+        self.root.protocol("WM_DELETE_WINDOW", lambda: self._respond(False))
+        self.root.grab_set()
+        self.root.wait_window()
         return self.responded
 
     def _respond(self, accepted):
@@ -240,7 +238,7 @@ class FindResultNotification:
         self.accepted = accepted
 
     def show(self):
-        self.root = tk.Tk()
+        self.root = tk.Toplevel()
         self.root.title("找人结果")
         self.root.geometry("350x180")
         self.root.attributes('-topmost', True)
@@ -265,7 +263,8 @@ class FindResultNotification:
                       font=('微软雅黑', 12)).pack(pady=10)
 
         ttk.Button(frame, text="确定", command=self.root.destroy).pack(pady=(10, 0))
-        self.root.mainloop()
+        self.root.grab_set()
+        self.root.wait_window()
 
 
 class SettingsDialog:
@@ -278,7 +277,7 @@ class SettingsDialog:
         self.result = None
 
     def show(self):
-        self.root = tk.Tk()
+        self.root = tk.Toplevel()
         self.root.title("设置")
         self.root.geometry("400x280")
         self.root.attributes('-topmost', True)
@@ -315,7 +314,8 @@ class SettingsDialog:
         ttk.Button(btn_frame, text="保存", command=self._on_save).pack(side='right', padx=(5, 0))
         ttk.Button(btn_frame, text="取消", command=self.root.destroy).pack(side='right')
 
-        self.root.mainloop()
+        self.root.grab_set()
+        self.root.wait_window()
         return self.result
 
     def _on_save(self):
